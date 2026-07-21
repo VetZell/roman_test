@@ -1,0 +1,37 @@
+/* ---------- MESSAGE RECEIPTS ---------- */
+
+.message.me {
+    position: relative;
+    padding-right: 34px;
+}
+
+.message-receipt {
+    position: absolute;
+    right: 9px;
+    bottom: 5px;
+
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -2px;
+
+    opacity: .75;
+    transition:
+        color .2s ease,
+        opacity .2s ease,
+        transform .2s ease;
+}
+
+.message-receipt.sent {
+    color: rgba(255, 255, 255, .7);
+}
+
+.message-receipt.delivered {
+    color: rgba(255, 255, 255, .95);
+}
+
+.message-receipt.read {
+    color: #67d4ff;
+    opacity: 1;
+    transform: scale(1.06);
+}
