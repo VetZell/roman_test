@@ -337,3 +337,72 @@ button:disabled {
 
     font-size: 22px;
 }
+/* ---------- ONLINE STATUS ---------- */
+
+.user-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.avatar-online-dot {
+    position: absolute;
+    right: 1px;
+    bottom: 3px;
+
+    width: 14px;
+    height: 14px;
+
+    border: 3px solid var(--card);
+    border-radius: 50%;
+    background: #64748b;
+}
+
+.avatar-online-dot.online {
+    background: #22c55e;
+}
+
+.avatar-online-dot.offline {
+    background: #64748b;
+}
+
+.user-online-status,
+.chat-online-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    margin-top: 5px;
+
+    font-size: 13px;
+    color: var(--hint);
+}
+
+.user-online-status.online,
+.chat-online-status.online {
+    color: #22c55e;
+}
+
+.online-dot {
+    width: 7px;
+    height: 7px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.chat-user-code {
+    display: block;
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: var(--hint);
+}
+
+.chat-online-status.offline,
+.user-online-status.offline {
+    color: var(--hint);
+}
