@@ -1,5 +1,10 @@
 const tg = window.Telegram?.WebApp;
 
+
+/* --------------------------------------------------
+   ЭЛЕМЕНТЫ ЭКРАНА АВТОРИЗАЦИИ
+-------------------------------------------------- */
+
 const cardElement =
     document.querySelector(".card");
 
@@ -18,6 +23,11 @@ const statusElement =
 const continueButton =
     document.getElementById("continue-button");
 
+
+/* --------------------------------------------------
+   ЭЛЕМЕНТЫ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
+-------------------------------------------------- */
+
 const usersScreen =
     document.getElementById("users-screen");
 
@@ -28,7 +38,41 @@ const backButton =
     document.getElementById("back-button");
 
 
+/* --------------------------------------------------
+   ЭЛЕМЕНТЫ ЧАТА
+-------------------------------------------------- */
+
+const chatScreen =
+    document.getElementById("chat-screen");
+
+const chatBackButton =
+    document.getElementById("chat-back-button");
+
+const chatAvatar =
+    document.getElementById("chat-avatar");
+
+const chatName =
+    document.getElementById("chat-name");
+
+const chatCode =
+    document.getElementById("chat-code");
+
+const messagesElement =
+    document.getElementById("messages");
+
+const messageInput =
+    document.getElementById("message-input");
+
+const sendButton =
+    document.getElementById("send-button");
+
+
+/* --------------------------------------------------
+   СОСТОЯНИЕ ПРИЛОЖЕНИЯ
+-------------------------------------------------- */
+
 let currentUser = null;
+let selectedUser = null;
 
 
 /* --------------------------------------------------
@@ -42,7 +86,8 @@ function showError(message) {
     usernameElement.textContent =
         "Открой приложение через Telegram";
 
-    statusElement.textContent = message;
+    statusElement.textContent =
+        message;
 
     statusElement.className =
         "status error";
@@ -55,7 +100,8 @@ function escapeHtml(value) {
     const element =
         document.createElement("div");
 
-    element.textContent = value || "";
+    element.textContent =
+        value ?? "";
 
     return element.innerHTML;
 }
@@ -63,8 +109,8 @@ function escapeHtml(value) {
 
 function getFullName(user) {
     const fullName = [
-        user.first_name,
-        user.last_name
+        user?.first_name,
+        user?.last_name
     ]
         .filter(Boolean)
         .join(" ");
@@ -74,14 +120,24 @@ function getFullName(user) {
 
 
 function getUserSubtitle(user) {
-    if (user.username) {
-        return (
-            `@${user.username} • ` +
-            `${user.messenger_code}`
-        );
+    const code =
+        user?.messenger_code || "";
+
+    if (user?.username) {
+        return `@${user.username} • ${code}`;
     }
 
-    return user.messenger_code;
+    return code;
+}
+
+
+function getDefaultAvatar() {
+    return "https://telegram.org/img/t_logo.png";
+}
+
+
+function vibrate(type = "light") {
+    tg?.HapticFeedback?.impactOccurred(type);
 }
 
 
@@ -100,9 +156,7 @@ async function authorize() {
     tg.ready();
     tg.expand();
 
-    const initData = tg.initData;
-
-    if (!initData) {
+    if (!tg.initData) {
         showError(
             "Данные Telegram не получены. " +
             "Открой Mini App кнопкой внутри бота."
@@ -122,7 +176,7 @@ async function authorize() {
                 },
 
                 body: JSON.stringify({
-                    init_data: initData
+                    init_data: tg.initData
                 })
             }
         );
@@ -139,19 +193,15 @@ async function authorize() {
 
         currentUser = result.user;
 
-        const fullName =
-            getFullName(currentUser);
-
         nameElement.textContent =
-            fullName;
+            getFullName(currentUser);
 
         usernameElement.textContent =
             getUserSubtitle(currentUser);
 
-        if (currentUser.photo_url) {
-            avatarElement.src =
-                currentUser.photo_url;
-        }
+        avatarElement.src =
+            currentUser.photo_url ||
+            getDefaultAvatar();
 
         statusElement.textContent =
             "✓ Личность подтверждена Telegram";
@@ -184,8 +234,8 @@ function renderUsers(users) {
             <div class="empty-users">
                 Пока других пользователей нет.
                 <br><br>
-                Попроси другого человека открыть
-                Roman Messenger через Telegram.
+                Открой Roman Messenger
+                со второго Telegram-аккаунта.
             </div>
         `;
 
@@ -201,10 +251,7 @@ function renderUsers(users) {
 
         const avatar =
             user.photo_url ||
-            "https://telegram.org/img/t_logo.png";
-
-        const subtitle =
-            getUserSubtitle(user);
+            getDefaultAvatar();
 
         userElement.innerHTML = `
             <img
@@ -221,7 +268,9 @@ function renderUsers(users) {
                 </div>
 
                 <div class="user-code">
-                    ${escapeHtml(subtitle)}
+                    ${escapeHtml(
+                        getUserSubtitle(user)
+                    )}
                 </div>
             </div>
 
@@ -232,9 +281,7 @@ function renderUsers(users) {
 
         userElement.addEventListener(
             "click",
-            () => {
-                selectUser(user);
-            }
+            () => openChatScreen(user)
         );
 
         usersList.appendChild(
@@ -282,8 +329,13 @@ async function openUsersScreen() {
         cardElement.style.display =
             "none";
 
+        chatScreen.style.display =
+            "none";
+
         usersScreen.style.display =
             "block";
+
+        vibrate();
 
     } catch (error) {
         alert(error.message);
@@ -298,26 +350,103 @@ async function openUsersScreen() {
 
 
 /* --------------------------------------------------
-   ВЫБОР ПОЛЬЗОВАТЕЛЯ
+   ОТКРЫТИЕ ЧАТА
 -------------------------------------------------- */
 
-function selectUser(user) {
-    tg.HapticFeedback?.impactOccurred(
-        "light"
-    );
+function openChatScreen(user) {
+    selectedUser = user;
 
     sessionStorage.setItem(
         "selected_user",
         JSON.stringify(user)
     );
 
-    alert(
-        "Выбран пользователь:\n\n" +
-        getFullName(user) +
-        "\n" +
-        getUserSubtitle(user) +
-        "\n\nСледующим шагом откроем чат."
+    chatName.textContent =
+        getFullName(user);
+
+    chatCode.textContent =
+        getUserSubtitle(user);
+
+    chatAvatar.src =
+        user.photo_url ||
+        getDefaultAvatar();
+
+    messagesElement.innerHTML = `
+        <div class="chat-empty">
+            Начните переписку с
+            <strong>
+                ${escapeHtml(getFullName(user))}
+            </strong>
+        </div>
+    `;
+
+    usersScreen.style.display =
+        "none";
+
+    cardElement.style.display =
+        "none";
+
+    chatScreen.style.display =
+        "block";
+
+    messageInput.focus();
+
+    vibrate();
+}
+
+
+/* --------------------------------------------------
+   ТЕСТОВЫЕ СООБЩЕНИЯ
+-------------------------------------------------- */
+
+function removeEmptyChatMessage() {
+    const emptyMessage =
+        messagesElement.querySelector(
+            ".chat-empty"
+        );
+
+    if (emptyMessage) {
+        emptyMessage.remove();
+    }
+}
+
+
+function addMessage(text, sender = "me") {
+    removeEmptyChatMessage();
+
+    const message =
+        document.createElement("div");
+
+    message.className =
+        `message ${sender}`;
+
+    message.textContent =
+        text;
+
+    messagesElement.appendChild(
+        message
     );
+
+    messagesElement.scrollTop =
+        messagesElement.scrollHeight;
+}
+
+
+function sendMessage() {
+    const text =
+        messageInput.value.trim();
+
+    if (!text || !selectedUser) {
+        return;
+    }
+
+    addMessage(text, "me");
+
+    messageInput.value = "";
+
+    messageInput.focus();
+
+    vibrate("medium");
 }
 
 
@@ -339,6 +468,45 @@ backButton.addEventListener(
 
         cardElement.style.display =
             "block";
+
+        vibrate();
+    }
+);
+
+
+chatBackButton.addEventListener(
+    "click",
+    () => {
+        chatScreen.style.display =
+            "none";
+
+        usersScreen.style.display =
+            "block";
+
+        selectedUser = null;
+
+        vibrate();
+    }
+);
+
+
+/* --------------------------------------------------
+   ОТПРАВКА СООБЩЕНИЯ
+-------------------------------------------------- */
+
+sendButton.addEventListener(
+    "click",
+    sendMessage
+);
+
+
+messageInput.addEventListener(
+    "keydown",
+    (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendMessage();
+        }
     }
 );
 
