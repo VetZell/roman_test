@@ -522,6 +522,81 @@ def send_message(
         },
     }
     
+    @app.websocket("/ws")
+async def websocket_endpoint(
+    websocket: WebSocket,
+):
+    init_data = websocket.query_params.get(
+        "init_data"
+    )
+
+    if not init_data:
+        await websocket.close(
+            code=1008,
+            reason="Telegram initData отсутствует",
+        )
+        return
+
+    database = SessionLocal()
+
+    try:
+        telegram_user = validate_telegram_init_data(
+            init_data
+        )
+
+        current_user = create_or_update_user(
+            telegram_user,
+            database,
+        )
+
+        user_id = current_user.id
+
+        await manager.connect(
+            user_id,
+            websocket,
+        )
+
+        await websocket.send_json({
+            "type": "connected",
+            "user_id": user_id,
+        })
+
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=30,
+                )
+
+                if data == "ping":
+                    await websocket.send_text(
+                        "pong"
+                    )
+
+            except asyncio.TimeoutError:
+                await websocket.send_text(
+                    "ping"
+                )
+
+    except WebSocketDisconnect:
+        pass
+
+    except Exception:
+        try:
+            await websocket.close(
+                code=1008,
+            )
+        except Exception:
+            pass
+
+    finally:
+        if "user_id" in locals():
+            manager.disconnect(
+                user_id,
+                websocket,
+            )
+
+        database.close()
     
 
 if __name__ == "__main__":
