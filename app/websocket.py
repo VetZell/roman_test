@@ -2,10 +2,7 @@ import asyncio
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.auth import (
-    create_or_update_user,
-    validate_telegram_init_data,
-)
+from app.auth import create_or_update_user, validate_telegram_init_data
 from database import SessionLocal
 
 
@@ -19,11 +16,7 @@ class ConnectionManager:
         websocket: WebSocket,
     ) -> None:
         await websocket.accept()
-
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-
-        self.active_connections[user_id].append(websocket)
+        self.active_connections.setdefault(user_id, []).append(websocket)
 
     def disconnect(
         self,
@@ -43,31 +36,19 @@ class ConnectionManager:
         user_id: int,
         data: dict,
     ) -> None:
-        connections = list(
-            self.active_connections.get(user_id, [])
-        )
-
-        disconnected_connections: list[WebSocket] = []
+        connections = list(self.active_connections.get(user_id, []))
 
         for connection in connections:
             try:
                 await connection.send_json(data)
             except Exception:
-                disconnected_connections.append(connection)
-
-        for connection in disconnected_connections:
-            self.disconnect(
-                user_id,
-                connection,
-            )
+                self.disconnect(user_id, connection)
 
 
 manager = ConnectionManager()
 
 
-async def websocket_endpoint(
-    websocket: WebSocket,
-) -> None:
+async def websocket_endpoint(websocket: WebSocket) -> None:
     init_data = websocket.query_params.get("init_data")
 
     if not init_data:
@@ -129,9 +110,6 @@ async def websocket_endpoint(
 
     finally:
         if user_id is not None:
-            manager.disconnect(
-                user_id,
-                websocket,
-            )
+            manager.disconnect(user_id, websocket)
 
         database.close()
