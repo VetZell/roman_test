@@ -22,10 +22,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-
 from models import Message, User
-
 from database import Base, engine, get_database
+from app.auth import (
+    create_or_update_user,
+    validate_telegram_init_data,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
