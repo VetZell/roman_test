@@ -55,6 +55,11 @@ app.mount(
 )
 
 
+@app.get("/")
+async def root():
+    return FileResponse(STATIC_DIR / "index.html")
+
+
 class TelegramAuthRequest(BaseModel):
     init_data: str
 
