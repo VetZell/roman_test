@@ -9,6 +9,7 @@ from fastapi import (
     FastAPI,
     HTTPException,
 )
+from app.routers.users import router as users_router
 from app.websocket import (
     manager,
     websocket_endpoint,
@@ -24,10 +25,6 @@ from database import (
     SessionLocal,
     engine,
     get_database,
-)
-from app.auth import (
-    create_or_update_user,
-    validate_telegram_init_data,
 )
 
 
@@ -45,7 +42,7 @@ app = FastAPI(
     title="Roman Messenger",
     lifespan=lifespan,
 )
-
+app.include_router(users_router)
 app.websocket("/ws")(websocket_endpoint)
 
 app.mount(
@@ -90,73 +87,6 @@ def database_health(
     }
 
 
-@app.post("/api/auth/telegram")
-def telegram_auth(
-    request: TelegramAuthRequest,
-    database: Session = Depends(get_database),
-):
-    telegram_user = validate_telegram_init_data(
-        request.init_data
-    )
-
-    user = create_or_update_user(
-        telegram_user,
-        database,
-    )
-
-    return {
-        "ok": True,
-        "user": {
-            "id": user.id,
-            "telegram_id": user.telegram_id,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "username": user.username,
-            "photo_url": user.photo_url,
-            "language_code": user.language_code,
-            "messenger_code": user.messenger_code,
-        },
-    }
-
-@app.post("/api/users")
-def get_users(
-    request: TelegramAuthRequest,
-    database: Session = Depends(get_database),
-):
-    telegram_user = validate_telegram_init_data(
-        request.init_data
-    )
-
-    current_user = create_or_update_user(
-        telegram_user,
-        database,
-    )
-
-    users = database.scalars(
-        select(User)
-        .where(
-            User.id != current_user.id,
-            User.is_active.is_(True),
-        )
-        .order_by(User.first_name.asc())
-        .limit(100)
-    ).all()
-
-    return {
-        "ok": True,
-        "users": [
-            {
-                "id": user.id,
-                "telegram_id": user.telegram_id,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "username": user.username,
-                "photo_url": user.photo_url,
-                "messenger_code": user.messenger_code,
-            }
-            for user in users
-        ],
-    }
 
 @app.post("/api/messages")
 def get_messages(
