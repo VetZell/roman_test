@@ -1,194 +1,181 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width,
+                 initial-scale=1.0,
+                 viewport-fit=cover">
 
     <title>Roman Messenger</title>
 
-    <link rel="stylesheet" href="/static/style.css">
+    <link
+        rel="stylesheet"
+        href="/static/style.css">
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>>
+
+</head>
 
 <body>
-    <main class="card">
+
+<div class="container">
+
+    <!-- Авторизация -->
+
+    <div class="card">
+
         <img
             id="avatar"
             class="avatar"
             src="https://telegram.org/img/t_logo.png"
-            alt="Аватар"
-        >
+            alt="Avatar">
 
-        <h1>Roman Messenger</h1>
+        <div class="title">
+            Roman Messenger
+        </div>
 
-        <h2 id="name">Авторизация...</h2>
+        <div
+            id="name"
+            class="name">
 
-        <p id="username">
-            Проверяем данные Telegram
-        </p>
+            Авторизация...
 
-        <div id="status" class="status">
+        </div>
+
+        <div
+            id="username"
+            class="username">
+
+            Проверяем Telegram...
+
+        </div>
+
+        <div
+            id="status"
+            class="status">
+
             Подождите...
+
         </div>
 
         <button
             id="continue-button"
-            type="button"
-            disabled
-        >
+            disabled>
+
             💬 Перейти к чатам
-        </button>
-        <section id="users-screen" class="users-screen">
-    <div class="users-header">
-        <button
-            id="back-button"
-            class="back-button"
-            type="button"
-        >
-            ← Назад
+
         </button>
 
-        <h2>Пользователи</h2>
     </div>
 
-    <div id="users-list"></div>
-</section>
-    </main>
 
-    <script>
-        const tg = window.Telegram?.WebApp;
+    <!-- Список пользователей -->
 
-        const nameElement =
-            document.getElementById("name");
+    <div
+        id="users-screen"
+        class="users-screen">
 
-        const usernameElement =
-            document.getElementById("username");
+        <div class="users-header">
 
-        const avatarElement =
-            document.getElementById("avatar");
+            <button
+                id="back-button"
+                class="back-button">
 
-        const statusElement =
-            document.getElementById("status");
+                ←
 
-        const continueButton =
-            document.getElementById("continue-button");
+            </button>
 
-        function showError(message) {
-            nameElement.textContent =
-                "Ошибка авторизации";
+            <h2>
 
-            usernameElement.textContent =
-                "Открой Mini App через Telegram";
+                Пользователи
 
-            statusElement.textContent = message;
-            statusElement.className =
-                "status error";
+            </h2>
 
-            continueButton.disabled = true;
-        }
+        </div>
 
-        async function authorize() {
-            if (!tg) {
-                showError(
-                    "Telegram WebApp SDK недоступен."
-                );
-                return;
-            }
+        <div id="users-list">
 
-            tg.ready();
-            tg.expand();
+        </div>
 
-            const initData = tg.initData;
+    </div>
 
-            if (!initData) {
-                showError(
-                    "Данные Telegram не получены. " +
-                    "Открой приложение кнопкой внутри бота."
-                );
-                return;
-            }
 
-            try {
-                const response = await fetch(
-                    "/api/auth/telegram",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-                        body: JSON.stringify({
-                            init_data: initData
-                        })
-                    }
-                );
+    <!-- Экран чата -->
 
-                const result = await response.json();
+    <div
+        id="chat-screen"
+        class="chat-screen">
 
-                if (!response.ok || !result.ok) {
-                    throw new Error(
-                        result.detail ||
-                        "Авторизация не выполнена"
-                    );
-                }
+        <div class="chat-header">
 
-                const user = result.user;
+            <button
+                id="chat-back-button"
+                class="back-button">
 
-                const fullName = [
-                    user.first_name,
-                    user.last_name
-                ]
-                    .filter(Boolean)
-                    .join(" ");
+                ←
 
-                nameElement.textContent =
-                    fullName || "Пользователь";
+            </button>
 
-                usernameElement.textContent =
-    user.username
-        ? `@${user.username} • ${user.messenger_code}`
-        : user.messenger_code;
+            <img
+                id="chat-avatar"
+                class="user-avatar"
+                src="https://telegram.org/img/t_logo.png">
 
-                if (user.photo_url) {
-                    avatarElement.src =
-                        user.photo_url;
-                }
+            <div>
 
-                statusElement.textContent =
-                    "✓ Личность подтверждена Telegram";
+                <div
+                    id="chat-name"
+                    class="user-name">
 
-                statusElement.className =
-                    "status success";
+                    Пользователь
 
-                continueButton.disabled = false;
+                </div>
 
-                sessionStorage.setItem(
-                    "telegram_user",
-                    JSON.stringify(user)
-                );
+                <div
+                    id="chat-code"
+                    class="user-code">
 
-            } catch (error) {
-                showError(error.message);
-            }
-        }
+                </div>
 
-        continueButton.addEventListener(
-            "click",
-            () => {
-                tg.HapticFeedback?.impactOccurred(
-                    "light"
-                );
+            </div>
 
-                alert(
-                    "Авторизация готова. " +
-                    "Следующим шагом добавим экран чатов."
-                );
-            }
-        );
+        </div>
 
-        authorize();
-    </script>
+        <div
+            id="messages"
+            class="messages">
+
+        </div>
+
+        <div class="input-panel">
+
+            <input
+                id="message-input"
+                type="text"
+                placeholder="Введите сообщение...">
+
+            <button
+                id="send-button"
+                class="send-button">
+
+                ➤
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script src="/static/app.js"></script>
+
 </body>
+
 </html>
