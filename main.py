@@ -357,18 +357,12 @@ def get_messages(
         .where(
             or_(
                 and_(
-                    Message.sender_id
-                    == current_user.id,
-
-                    Message.receiver_id
-                    == other_user.id,
+                    Message.sender_id == current_user.id,
+                    Message.receiver_id == other_user.id,
                 ),
                 and_(
-                    Message.sender_id
-                    == other_user.id,
-
-                    Message.receiver_id
-                    == current_user.id,
+                    Message.sender_id == other_user.id,
+                    Message.receiver_id == current_user.id,
                 ),
             )
         )
@@ -387,14 +381,14 @@ def get_messages(
                 "sender_id": message.sender_id,
                 "receiver_id": message.receiver_id,
                 "text": message.text,
-                "created_at":
-                    message.created_at.isoformat(),
+                "created_at": message.created_at.isoformat(),
             }
             for message in messages
         ],
     }
-    
-    @app.post("/api/messages/send")
+
+
+@app.post("/api/messages/send")
 def send_message(
     request: SendMessageRequest,
     database: Session = Depends(get_database),
@@ -450,8 +444,7 @@ def send_message(
             "sender_id": message.sender_id,
             "receiver_id": message.receiver_id,
             "text": message.text,
-            "created_at":
-                message.created_at.isoformat(),
+            "created_at": message.created_at.isoformat(),
         },
     }
     
