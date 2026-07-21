@@ -1,71 +1,36 @@
 const tg = window.Telegram?.WebApp;
 
-
 /* --------------------------------------------------
    ЭЛЕМЕНТЫ ЭКРАНА АВТОРИЗАЦИИ
 -------------------------------------------------- */
 
-const cardElement =
-    document.querySelector(".card");
-
-const nameElement =
-    document.getElementById("name");
-
-const usernameElement =
-    document.getElementById("username");
-
-const avatarElement =
-    document.getElementById("avatar");
-
-const statusElement =
-    document.getElementById("status");
-
-const continueButton =
-    document.getElementById("continue-button");
-
+const cardElement = document.querySelector(".card");
+const nameElement = document.getElementById("name");
+const usernameElement = document.getElementById("username");
+const avatarElement = document.getElementById("avatar");
+const statusElement = document.getElementById("status");
+const continueButton = document.getElementById("continue-button");
 
 /* --------------------------------------------------
    ЭЛЕМЕНТЫ СПИСКА ПОЛЬЗОВАТЕЛЕЙ
 -------------------------------------------------- */
 
-const usersScreen =
-    document.getElementById("users-screen");
-
-const usersList =
-    document.getElementById("users-list");
-
-const backButton =
-    document.getElementById("back-button");
-
+const usersScreen = document.getElementById("users-screen");
+const usersList = document.getElementById("users-list");
+const backButton = document.getElementById("back-button");
 
 /* --------------------------------------------------
    ЭЛЕМЕНТЫ ЧАТА
 -------------------------------------------------- */
 
-const chatScreen =
-    document.getElementById("chat-screen");
-
-const chatBackButton =
-    document.getElementById("chat-back-button");
-
-const chatAvatar =
-    document.getElementById("chat-avatar");
-
-const chatName =
-    document.getElementById("chat-name");
-
-const chatCode =
-    document.getElementById("chat-code");
-
-const messagesElement =
-    document.getElementById("messages");
-
-const messageInput =
-    document.getElementById("message-input");
-
-const sendButton =
-    document.getElementById("send-button");
-
+const chatScreen = document.getElementById("chat-screen");
+const chatBackButton = document.getElementById("chat-back-button");
+const chatAvatar = document.getElementById("chat-avatar");
+const chatName = document.getElementById("chat-name");
+const chatCode = document.getElementById("chat-code");
+const messagesElement = document.getElementById("messages");
+const messageInput = document.getElementById("message-input");
+const sendButton = document.getElementById("send-button");
 
 /* --------------------------------------------------
    СОСТОЯНИЕ ПРИЛОЖЕНИЯ
@@ -73,50 +38,34 @@ const sendButton =
 
 let currentUser = null;
 let selectedUser = null;
-
 let socket = null;
 let reconnectTimer = null;
+let usersCache = [];
 
-const renderedMessageIds =
-    new Set();
-
+const renderedMessageIds = new Set();
 
 /* --------------------------------------------------
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 -------------------------------------------------- */
 
 function showError(message) {
-    nameElement.textContent =
-        "Ошибка авторизации";
-
-    usernameElement.textContent =
-        "Открой приложение через Telegram";
-
-    statusElement.textContent =
-        message;
-
-    statusElement.className =
-        "status error";
-
+    nameElement.textContent = "Ошибка авторизации";
+    usernameElement.textContent = "Открой приложение через Telegram";
+    statusElement.textContent = message;
+    statusElement.className = "status error";
     continueButton.disabled = true;
 }
 
-
 function escapeHtml(value) {
-    const element =
-        document.createElement("div");
-
-    element.textContent =
-        value ?? "";
-
+    const element = document.createElement("div");
+    element.textContent = value ?? "";
     return element.innerHTML;
 }
-
 
 function getFullName(user) {
     const fullName = [
         user?.first_name,
-        user?.last_name
+        user?.last_name,
     ]
         .filter(Boolean)
         .join(" ");
@@ -124,10 +73,8 @@ function getFullName(user) {
     return fullName || "Пользователь";
 }
 
-
 function getUserSubtitle(user) {
-    const code =
-        user?.messenger_code || "";
+    const code = user?.messenger_code || "";
 
     if (user?.username) {
         return `@${user.username} • ${code}`;
@@ -136,16 +83,17 @@ function getUserSubtitle(user) {
     return code;
 }
 
-
 function getDefaultAvatar() {
     return "https://telegram.org/img/t_logo.png";
 }
 
+function getOnlineText(user) {
+    return user?.is_online ? "онлайн" : "не в сети";
+}
 
 function vibrate(type = "light") {
     tg?.HapticFeedback?.impactOccurred(type);
 }
-
 
 function showAlert(message) {
     if (tg?.showAlert) {
@@ -156,6 +104,67 @@ function showAlert(message) {
     alert(message);
 }
 
+/* --------------------------------------------------
+   ОБНОВЛЕНИЕ ОНЛАЙН-СТАТУСА
+-------------------------------------------------- */
+
+function updateUserOnlineStatus(userId, isOnline) {
+    const numericUserId = Number(userId);
+
+    usersCache = usersCache.map((user) => {
+        if (Number(user.id) !== numericUserId) {
+            return user;
+        }
+
+        return {
+            ...user,
+            is_online: Boolean(isOnline),
+        };
+    });
+
+    if (
+        selectedUser &&
+        Number(selectedUser.id) === numericUserId
+    ) {
+        selectedUser = {
+            ...selectedUser,
+            is_online: Boolean(isOnline),
+        };
+
+        sessionStorage.setItem(
+            "selected_user",
+            JSON.stringify(selectedUser),
+        );
+
+        updateChatHeaderStatus();
+    }
+
+    if (
+        usersScreen &&
+        usersScreen.style.display !== "none"
+    ) {
+        renderUsers(usersCache);
+    }
+}
+
+function updateChatHeaderStatus() {
+    if (!selectedUser) {
+        return;
+    }
+
+    chatCode.innerHTML = `
+        <span class="chat-user-code">
+            ${escapeHtml(getUserSubtitle(selectedUser))}
+        </span>
+
+        <span class="chat-online-status ${
+            selectedUser.is_online ? "online" : "offline"
+        }">
+            <span class="online-dot"></span>
+            ${selectedUser.is_online ? "онлайн" : "не в сети"}
+        </span>
+    `;
+}
 
 /* --------------------------------------------------
    WEBSOCKET
@@ -186,76 +195,59 @@ function connectWebSocket() {
         `/ws?init_data=` +
         encodeURIComponent(tg.initData);
 
-    socket =
-        new WebSocket(socketUrl);
+    socket = new WebSocket(socketUrl);
 
-    socket.addEventListener(
-        "open",
-        () => {
-            console.log(
-                "WebSocket подключён"
-            );
+    socket.addEventListener("open", () => {
+        console.log("WebSocket подключён");
+        clearTimeout(reconnectTimer);
+    });
 
-            clearTimeout(
-                reconnectTimer
-            );
-        }
-    );
-
-    socket.addEventListener(
-        "message",
-        (event) => {
-            if (event.data === "ping") {
-                if (
-                    socket?.readyState ===
-                    WebSocket.OPEN
-                ) {
-                    socket.send("pong");
-                }
-
-                return;
+    socket.addEventListener("message", (event) => {
+        if (event.data === "ping") {
+            if (socket?.readyState === WebSocket.OPEN) {
+                socket.send("pong");
             }
 
-            let data;
-
-            try {
-                data =
-                    JSON.parse(event.data);
-            } catch {
-                return;
-            }
-
-            handleSocketEvent(data);
+            return;
         }
-    );
 
-    socket.addEventListener(
-        "close",
-        () => {
-            socket = null;
+        let data;
 
-            clearTimeout(
-                reconnectTimer
-            );
-
-            reconnectTimer =
-                setTimeout(
-                    connectWebSocket,
-                    3000
-                );
+        try {
+            data = JSON.parse(event.data);
+        } catch {
+            return;
         }
-    );
 
-    socket.addEventListener(
-        "error",
-        () => {
-            socket?.close();
-        }
-    );
+        handleSocketEvent(data);
+    });
+
+    socket.addEventListener("close", () => {
+        socket = null;
+
+        clearTimeout(reconnectTimer);
+
+        reconnectTimer = setTimeout(
+            connectWebSocket,
+            3000,
+        );
+    });
+
+    socket.addEventListener("error", () => {
+        socket?.close();
+    });
 }
 
-
 function handleSocketEvent(data) {
+    if (data.type === "user_status") {
+        updateUserOnlineStatus(
+            data.user_id,
+            data.is_online,
+        );
+
+        return;
+    }
+
     if (
         data.type !== "new_message" ||
         !data.message
@@ -263,20 +255,15 @@ function handleSocketEvent(data) {
         return;
     }
 
-    const message =
-        data.message;
+    const message = data.message;
 
-    if (
-        renderedMessageIds.has(
-            message.id
-        )
-    ) {
+    if (renderedMessageIds.has(message.id)) {
         return;
     }
 
     if (
         !selectedUser ||
-        message.sender_id !== selectedUser.id
+        Number(message.sender_id) !== Number(selectedUser.id)
     ) {
         vibrate("medium");
         return;
@@ -285,23 +272,18 @@ function handleSocketEvent(data) {
     addMessage(
         message.text,
         "other",
-        message.id
+        message.id,
     );
 
     vibrate("medium");
 }
-
-
 /* --------------------------------------------------
    TELEGRAM-АВТОРИЗАЦИЯ
 -------------------------------------------------- */
 
 async function authorize() {
     if (!tg) {
-        showError(
-            "Telegram WebApp SDK недоступен."
-        );
-
+        showError("Telegram WebApp SDK недоступен.");
         return;
     }
 
@@ -311,43 +293,35 @@ async function authorize() {
     if (!tg.initData) {
         showError(
             "Данные Telegram не получены. " +
-            "Открой Mini App кнопкой внутри бота."
+            "Открой Mini App кнопкой внутри бота.",
         );
-
         return;
     }
 
     try {
-        const response =
-            await fetch(
-                "/api/auth/telegram",
-                {
-                    method: "POST",
+        const response = await fetch(
+            "/api/auth/telegram",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    init_data: tg.initData,
+                }),
+            },
+        );
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        init_data:
-                            tg.initData
-                    })
-                }
-            );
-
-        const result =
-            await response.json();
+        const result = await response.json();
 
         if (!response.ok || !result.ok) {
             throw new Error(
                 result.detail ||
-                "Авторизация не выполнена"
+                "Авторизация не выполнена",
             );
         }
 
-        currentUser =
-            result.user;
+        currentUser = result.user;
 
         nameElement.textContent =
             getFullName(currentUser);
@@ -365,21 +339,18 @@ async function authorize() {
         statusElement.className =
             "status success";
 
-        continueButton.disabled =
-            false;
+        continueButton.disabled = false;
 
         sessionStorage.setItem(
             "telegram_user",
-            JSON.stringify(currentUser)
+            JSON.stringify(currentUser),
         );
 
         connectWebSocket();
-
     } catch (error) {
         showError(error.message);
     }
 }
-
 
 /* --------------------------------------------------
    СПИСОК ПОЛЬЗОВАТЕЛЕЙ
@@ -391,13 +362,10 @@ function renderUsers(users) {
     if (!users.length) {
         usersList.innerHTML = `
             <div class="empty-users">
-                Пока других пользователей нет.
-                <br><br>
-                Открой Roman Messenger
-                со второго Telegram-аккаунта.
+                Пока других пользователей нет.<br><br>
+                Открой Roman Messenger со второго Telegram-аккаунта.
             </div>
         `;
-
         return;
     }
 
@@ -405,147 +373,136 @@ function renderUsers(users) {
         const userElement =
             document.createElement("div");
 
-        userElement.className =
-            "user-card";
+        userElement.className = "user-card";
+        userElement.dataset.userId = String(user.id);
 
         const avatar =
             user.photo_url ||
             getDefaultAvatar();
 
+        const onlineClass =
+            user.is_online
+                ? "online"
+                : "offline";
+
         userElement.innerHTML = `
-            <img
-                class="user-avatar"
-                src="${escapeHtml(avatar)}"
-                alt="Аватар"
-            >
+            <div class="user-avatar-wrap">
+                <img
+                    class="user-avatar"
+                    src="${escapeHtml(avatar)}"
+                    alt=""
+                >
+
+                <span
+                    class="avatar-online-dot ${onlineClass}"
+                ></span>
+            </div>
 
             <div class="user-info">
                 <div class="user-name">
-                    ${escapeHtml(
-                        getFullName(user)
-                    )}
+                    ${escapeHtml(getFullName(user))}
                 </div>
 
                 <div class="user-code">
-                    ${escapeHtml(
-                        getUserSubtitle(user)
-                    )}
+                    ${escapeHtml(getUserSubtitle(user))}
+                </div>
+
+                <div
+                    class="user-online-status ${onlineClass}"
+                >
+                    <span class="online-dot"></span>
+                    ${escapeHtml(getOnlineText(user))}
                 </div>
             </div>
 
-            <div class="user-arrow">
-                ›
-            </div>
+            <div class="user-arrow">›</div>
         `;
 
         userElement.addEventListener(
             "click",
             () => {
                 openChatScreen(user);
-            }
+            },
         );
 
-        usersList.appendChild(
-            userElement
-        );
+        usersList.appendChild(userElement);
     });
 }
 
-
 async function openUsersScreen() {
     continueButton.disabled = true;
-
     continueButton.textContent =
         "Загрузка пользователей...";
 
     try {
-        const response =
-            await fetch(
-                "/api/users",
-                {
-                    method: "POST",
+        const response = await fetch(
+            "/api/users",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    init_data: tg.initData,
+                }),
+            },
+        );
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        init_data:
-                            tg.initData
-                    })
-                }
-            );
-
-        const result =
-            await response.json();
+        const result = await response.json();
 
         if (!response.ok || !result.ok) {
             throw new Error(
                 result.detail ||
-                "Не удалось загрузить пользователей"
+                "Не удалось загрузить пользователей",
             );
         }
 
-        renderUsers(
-            result.users
-        );
+        usersCache = result.users || [];
+        renderUsers(usersCache);
 
-        cardElement.style.display =
-            "none";
-
-        chatScreen.style.display =
-            "none";
-
-        usersScreen.style.display =
-            "block";
+        cardElement.style.display = "none";
+        chatScreen.style.display = "none";
+        usersScreen.style.display = "block";
 
         vibrate();
-
     } catch (error) {
         showAlert(error.message);
-
     } finally {
-        continueButton.disabled =
-            false;
-
+        continueButton.disabled = false;
         continueButton.textContent =
-            "💬 Перейти к чатам";
+            "Перейти к чатам";
     }
 }
-
 
 /* --------------------------------------------------
    ОТКРЫТИЕ ЧАТА
 -------------------------------------------------- */
 
 async function openChatScreen(user) {
-    selectedUser =
-        user;
+    const cachedUser = usersCache.find(
+        (item) =>
+            Number(item.id) === Number(user.id),
+    );
+
+    selectedUser = cachedUser || user;
 
     sessionStorage.setItem(
         "selected_user",
-        JSON.stringify(user)
+        JSON.stringify(selectedUser),
     );
 
     chatName.textContent =
-        getFullName(user);
+        getFullName(selectedUser);
 
-    chatCode.textContent =
-        getUserSubtitle(user);
+    updateChatHeaderStatus();
 
     chatAvatar.src =
-        user.photo_url ||
+        selectedUser.photo_url ||
         getDefaultAvatar();
 
-    cardElement.style.display =
-        "none";
-
-    usersScreen.style.display =
-        "none";
-
-    chatScreen.style.display =
-        "block";
+    cardElement.style.display = "none";
+    usersScreen.style.display = "none";
+    chatScreen.style.display = "block";
 
     messagesElement.innerHTML = `
         <div class="chat-empty">
@@ -561,8 +518,6 @@ async function openChatScreen(user) {
 
     messageInput.focus();
 }
-
-
 /* --------------------------------------------------
    ЗАГРУЗКА СООБЩЕНИЙ
 -------------------------------------------------- */
@@ -573,89 +528,69 @@ async function loadMessages() {
     }
 
     try {
-        const response =
-            await fetch(
-                "/api/messages",
-                {
-                    method: "POST",
+        const response = await fetch(
+            "/api/messages",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    init_data: tg.initData,
+                    user_id: selectedUser.id,
+                }),
+            },
+        );
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        init_data:
-                            tg.initData,
-
-                        user_id:
-                            selectedUser.id
-                    })
-                }
-            );
-
-        const result =
-            await response.json();
+        const result = await response.json();
 
         if (!response.ok || !result.ok) {
             throw new Error(
                 result.detail ||
-                "Не удалось загрузить сообщения"
+                "Не удалось загрузить сообщения",
             );
         }
 
         renderedMessageIds.clear();
-
-        messagesElement.innerHTML =
-            "";
+        messagesElement.innerHTML = "";
 
         if (!result.messages.length) {
             messagesElement.innerHTML = `
                 <div class="chat-empty">
                     Начните переписку с
-                    <strong>
-                        ${escapeHtml(
-                            getFullName(
-                                selectedUser
-                            )
-                        )}
-                    </strong>
+                    ${escapeHtml(
+                        getFullName(selectedUser),
+                    )}
                 </div>
             `;
 
             return;
         }
 
-        result.messages.forEach(
-            (message) => {
-                const sender =
-                    message.sender_id ===
-                    currentUser.id
-                        ? "me"
-                        : "other";
+        result.messages.forEach((message) => {
+            const sender =
+                Number(message.sender_id) ===
+                Number(currentUser.id)
+                    ? "me"
+                    : "other";
 
-                addMessage(
-                    message.text,
-                    sender,
-                    message.id
-                );
-            }
-        );
+            addMessage(
+                message.text,
+                sender,
+                message.id,
+            );
+        });
 
         messagesElement.scrollTop =
             messagesElement.scrollHeight;
-
     } catch (error) {
         messagesElement.innerHTML = `
-            <div class="chat-empty">
-                ${escapeHtml(
-                    error.message
-                )}
+            <div class="chat-empty error">
+                ${escapeHtml(error.message)}
             </div>
         `;
     }
 }
-
 
 /* --------------------------------------------------
    ОТОБРАЖЕНИЕ СООБЩЕНИЙ
@@ -664,7 +599,7 @@ async function loadMessages() {
 function removeEmptyChatMessage() {
     const emptyMessage =
         messagesElement.querySelector(
-            ".chat-empty"
+            ".chat-empty",
         );
 
     if (emptyMessage) {
@@ -672,17 +607,14 @@ function removeEmptyChatMessage() {
     }
 }
 
-
 function addMessage(
     text,
     sender = "me",
-    messageId = null
+    messageId = null,
 ) {
     if (
         messageId !== null &&
-        renderedMessageIds.has(
-            messageId
-        )
+        renderedMessageIds.has(messageId)
     ) {
         return;
     }
@@ -695,215 +627,74 @@ function addMessage(
     messageElement.className =
         `message ${sender}`;
 
-    messageElement.textContent =
-        text;
+    messageElement.textContent = text;
 
     if (messageId !== null) {
-        renderedMessageIds.add(
-            messageId
-        );
+        renderedMessageIds.add(messageId);
 
         messageElement.dataset.messageId =
             String(messageId);
     }
 
-    messagesElement.appendChild(
-        messageElement
-    );
+    messagesElement.appendChild(messageElement);
 
     messagesElement.scrollTop =
         messagesElement.scrollHeight;
 }
-
 
 /* --------------------------------------------------
    ОТПРАВКА СООБЩЕНИЯ
 -------------------------------------------------- */
 
 async function sendMessage() {
-    const text =
-        messageInput.value.trim();
+    const text = messageInput.value.trim();
 
     if (!text || !selectedUser) {
         return;
     }
 
-    sendButton.disabled =
-        true;
-
-    messageInput.disabled =
-        true;
+    sendButton.disabled = true;
+    messageInput.disabled = true;
 
     try {
-        const response =
-            await fetch(
-                "/api/messages/send",
-                {
-                    method: "POST",
+        const response = await fetch(
+            "/api/messages/send",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    init_data: tg.initData,
+                    receiver_id: selectedUser.id,
+                    text,
+                }),
+            },
+        );
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        init_data:
-                            tg.initData,
-
-                        receiver_id:
-                            selectedUser.id,
-
-                        text:
-                            text
-                    })
-                }
-            );
-
-        const result =
-            await response.json();
+        const result = await response.json();
 
         if (!response.ok || !result.ok) {
             throw new Error(
                 result.detail ||
-                "Не удалось отправить сообщение"
+                "Не удалось отправить сообщение",
             );
         }
 
         addMessage(
             result.message.text,
             "me",
-            result.message.id
+            result.message.id,
         );
 
-        messageInput.value =
-            "";
+        messageInput.value = "";
 
         vibrate("medium");
-
     } catch (error) {
         showAlert(error.message);
-
     } finally {
-        sendButton.disabled =
-            false;
-
-        messageInput.disabled =
-            false;
-
+        sendButton.disabled = false;
+        messageInput.disabled = false;
         messageInput.focus();
     }
 }
-
-
-/* --------------------------------------------------
-   НАВИГАЦИЯ
--------------------------------------------------- */
-
-continueButton.addEventListener(
-    "click",
-    openUsersScreen
-);
-
-
-backButton.addEventListener(
-    "click",
-    () => {
-        usersScreen.style.display =
-            "none";
-
-        chatScreen.style.display =
-            "none";
-
-        cardElement.style.display =
-            "block";
-
-        selectedUser =
-            null;
-
-        vibrate();
-    }
-);
-
-
-chatBackButton.addEventListener(
-    "click",
-    () => {
-        chatScreen.style.display =
-            "none";
-
-        cardElement.style.display =
-            "none";
-
-        usersScreen.style.display =
-            "block";
-
-        selectedUser =
-            null;
-
-        renderedMessageIds.clear();
-
-        vibrate();
-    }
-);
-
-
-/* --------------------------------------------------
-   ОБРАБОТЧИКИ ОТПРАВКИ
--------------------------------------------------- */
-
-sendButton.addEventListener(
-    "click",
-    sendMessage
-);
-
-
-messageInput.addEventListener(
-    "keydown",
-    (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-
-            sendMessage();
-        }
-    }
-);
-
-
-/* --------------------------------------------------
-   ЖИЗНЕННЫЙ ЦИКЛ
--------------------------------------------------- */
-
-document.addEventListener(
-    "visibilitychange",
-    () => {
-        if (
-            document.visibilityState ===
-            "visible"
-        ) {
-            connectWebSocket();
-
-            if (selectedUser) {
-                loadMessages();
-            }
-        }
-    }
-);
-
-
-window.addEventListener(
-    "beforeunload",
-    () => {
-        clearTimeout(
-            reconnectTimer
-        );
-
-        socket?.close();
-    }
-);
-
-
-/* --------------------------------------------------
-   ЗАПУСК
--------------------------------------------------- */
-
-authorize();
