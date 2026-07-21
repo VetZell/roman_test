@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -64,7 +65,6 @@ class ConnectionManager:
         for connection in connections:
             try:
                 await connection.send_json(data)
-
             except Exception:
                 self.disconnect(
                     user_id,
@@ -85,7 +85,6 @@ class ConnectionManager:
             for connection in list(connections):
                 try:
                     await connection.send_json(data)
-
                 except Exception:
                     disconnected_connections.append(
                         (
@@ -155,20 +154,48 @@ async def websocket_endpoint(
 
         while True:
             try:
-                data = await asyncio.wait_for(
+                raw_data = await asyncio.wait_for(
                     websocket.receive_text(),
                     timeout=30,
                 )
 
-                if data == "ping":
-                    await websocket.send_text(
-                        "pong"
-                    )
+                if raw_data == "ping":
+                    await websocket.send_text("pong")
+                    continue
+
+                if raw_data == "pong":
+                    continue
+
+                try:
+                    data = json.loads(raw_data)
+                except json.JSONDecodeError:
+                    continue
+
+                if data.get("type") != "typing":
+                    continue
+
+                receiver_id = data.get("receiver_id")
+                is_typing = bool(data.get("is_typing"))
+
+                try:
+                    receiver_id = int(receiver_id)
+                except (TypeError, ValueError):
+                    continue
+
+                if receiver_id == user_id:
+                    continue
+
+                await manager.send_to_user(
+                    receiver_id,
+                    {
+                        "type": "typing",
+                        "user_id": user_id,
+                        "is_typing": is_typing,
+                    },
+                )
 
             except asyncio.TimeoutError:
-                await websocket.send_text(
-                    "ping"
-                )
+                await websocket.send_text("ping")
 
             except WebSocketDisconnect:
                 break
