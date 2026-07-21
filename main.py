@@ -12,12 +12,13 @@ from urllib.parse import parse_qsl
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
+
+from models import Message, User
 
 from database import Base, engine, get_database
-from models import User
 
 
 BASE_DIR = Path(__file__).resolve().parent
