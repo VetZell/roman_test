@@ -62,21 +62,6 @@ async def root():
 class TelegramAuthRequest(BaseModel):
     init_data: str
 
-class MessagesRequest(BaseModel):
-    init_data: str
-    user_id: int
-
-
-class SendMessageRequest(BaseModel):
-    init_data: str
-    receiver_id: int
-
-    text: str = Field(
-        min_length=1,
-        max_length=4000,
-    )
-
-
 @app.get("/health/database")
 def database_health(
     database: Session = Depends(get_database),
