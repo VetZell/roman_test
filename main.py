@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.routers.messages import router as messages_router
@@ -18,9 +18,23 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
 
+def migrate_message_receipts() -> None:
+    statements = [
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_delivered BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP NULL",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP NULL",
+    ]
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    migrate_message_receipts()
     yield
 
 
