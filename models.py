@@ -1,116 +1,120 @@
-from datetime import datetime
-
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
-
-from database import Base
-
-
-def utc_now():
-    return datetime.now(timezone.utc)
-
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(
-        primary_key=True,
-        autoincrement=True,
+@app.post("/api/messages")
+def get_messages(
+    request: MessagesRequest,
+    database: Session = Depends(get_database),
+):
+    telegram_user = validate_telegram_init_data(
+        request.init_data
     )
 
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger,
-        unique=True,
-        nullable=False,
-        index=True,
+    current_user = create_or_update_user(
+        telegram_user,
+        database,
     )
 
-    username: Mapped[str | None] = mapped_column(
-        String(64),
-        nullable=True,
-        index=True,
+    other_user = database.get(
+        User,
+        request.user_id,
     )
 
-    first_name: Mapped[str] = mapped_column(
-        String(128),
-        nullable=False,
+    if other_user is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Пользователь не найден",
+        )
+
+    messages = database.scalars(
+        select(Message)
+        .where(
+            or_(
+                and_(
+                    Message.sender_id == current_user.id,
+                    Message.receiver_id == other_user.id,
+                ),
+                and_(
+                    Message.sender_id == other_user.id,
+                    Message.receiver_id == current_user.id,
+                ),
+            )
+        )
+        .order_by(
+            Message.created_at.asc(),
+            Message.id.asc(),
+        )
+        .limit(500)
+    ).all()
+
+    return {
+        "ok": True,
+        "messages": [
+            {
+                "id": message.id,
+                "sender_id": message.sender_id,
+                "receiver_id": message.receiver_id,
+                "text": message.text,
+                "created_at": message.created_at.isoformat(),
+            }
+            for message in messages
+        ],
+    }
+
+
+@app.post("/api/messages/send")
+def send_message(
+    request: SendMessageRequest,
+    database: Session = Depends(get_database),
+):
+    telegram_user = validate_telegram_init_data(
+        request.init_data
     )
 
-    last_name: Mapped[str | None] = mapped_column(
-        String(128),
-        nullable=True,
+    current_user = create_or_update_user(
+        telegram_user,
+        database,
     )
 
-    photo_url: Mapped[str | None] = mapped_column(
-        String(1000),
-        nullable=True,
+    receiver = database.get(
+        User,
+        request.receiver_id,
     )
 
-    language_code: Mapped[str | None] = mapped_column(
-        String(16),
-        nullable=True,
+    if receiver is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Получатель не найден",
+        )
+
+    if receiver.id == current_user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя отправить сообщение самому себе",
+        )
+
+    clean_text = request.text.strip()
+
+    if not clean_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Сообщение не может быть пустым",
+        )
+
+    message = Message(
+        sender_id=current_user.id,
+        receiver_id=receiver.id,
+        text=clean_text,
     )
 
-    messenger_code: Mapped[str] = mapped_column(
-        String(16),
-        unique=True,
-        nullable=False,
-        index=True,
-    )
+    database.add(message)
+    database.commit()
+    database.refresh(message)
 
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        nullable=False,
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        onupdate=utc_now,
-        nullable=False,
-    )
-    
-    class Message(Base):
-    __tablename__ = "messages"
-
-    id: Mapped[int] = mapped_column(
-        primary_key=True,
-        autoincrement=True,
-    )
-
-    sender_id: Mapped[int] = mapped_column(
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
-
-    receiver_id: Mapped[int] = mapped_column(
-        ForeignKey(
-            "users.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-        index=True,
-    )
-
-    text: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False,
-        index=True,
-    )
+    return {
+        "ok": True,
+        "message": {
+            "id": message.id,
+            "sender_id": message.sender_id,
+            "receiver_id": message.receiver_id,
+            "text": message.text,
+            "created_at": message.created_at.isoformat(),
+        },
+    }
