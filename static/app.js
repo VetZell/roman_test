@@ -74,6 +74,12 @@ const sendButton =
 let currentUser = null;
 let selectedUser = null;
 
+let socket = null;
+let reconnectTimer = null;
+
+const renderedMessageIds =
+    new Set();
+
 
 /* --------------------------------------------------
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -141,6 +147,151 @@ function vibrate(type = "light") {
 }
 
 
+function showAlert(message) {
+    if (tg?.showAlert) {
+        tg.showAlert(message);
+        return;
+    }
+
+    alert(message);
+}
+
+
+/* --------------------------------------------------
+   WEBSOCKET
+-------------------------------------------------- */
+
+function connectWebSocket() {
+    if (!tg?.initData) {
+        return;
+    }
+
+    if (
+        socket &&
+        (
+            socket.readyState === WebSocket.OPEN ||
+            socket.readyState === WebSocket.CONNECTING
+        )
+    ) {
+        return;
+    }
+
+    const protocol =
+        window.location.protocol === "https:"
+            ? "wss:"
+            : "ws:";
+
+    const socketUrl =
+        `${protocol}//${window.location.host}` +
+        `/ws?init_data=` +
+        encodeURIComponent(tg.initData);
+
+    socket =
+        new WebSocket(socketUrl);
+
+    socket.addEventListener(
+        "open",
+        () => {
+            console.log(
+                "WebSocket подключён"
+            );
+
+            clearTimeout(
+                reconnectTimer
+            );
+        }
+    );
+
+    socket.addEventListener(
+        "message",
+        (event) => {
+            if (event.data === "ping") {
+                if (
+                    socket?.readyState ===
+                    WebSocket.OPEN
+                ) {
+                    socket.send("pong");
+                }
+
+                return;
+            }
+
+            let data;
+
+            try {
+                data =
+                    JSON.parse(event.data);
+            } catch {
+                return;
+            }
+
+            handleSocketEvent(data);
+        }
+    );
+
+    socket.addEventListener(
+        "close",
+        () => {
+            socket = null;
+
+            clearTimeout(
+                reconnectTimer
+            );
+
+            reconnectTimer =
+                setTimeout(
+                    connectWebSocket,
+                    3000
+                );
+        }
+    );
+
+    socket.addEventListener(
+        "error",
+        () => {
+            socket?.close();
+        }
+    );
+}
+
+
+function handleSocketEvent(data) {
+    if (
+        data.type !== "new_message" ||
+        !data.message
+    ) {
+        return;
+    }
+
+    const message =
+        data.message;
+
+    if (
+        renderedMessageIds.has(
+            message.id
+        )
+    ) {
+        return;
+    }
+
+    if (
+        !selectedUser ||
+        message.sender_id !== selectedUser.id
+    ) {
+        vibrate("medium");
+        return;
+    }
+
+    addMessage(
+        message.text,
+        "other",
+        message.id
+    );
+
+    vibrate("medium");
+}
+
+
 /* --------------------------------------------------
    TELEGRAM-АВТОРИЗАЦИЯ
 -------------------------------------------------- */
@@ -150,6 +301,7 @@ async function authorize() {
         showError(
             "Telegram WebApp SDK недоступен."
         );
+
         return;
     }
 
@@ -161,25 +313,28 @@ async function authorize() {
             "Данные Telegram не получены. " +
             "Открой Mini App кнопкой внутри бота."
         );
+
         return;
     }
 
     try {
-        const response = await fetch(
-            "/api/auth/telegram",
-            {
-                method: "POST",
+        const response =
+            await fetch(
+                "/api/auth/telegram",
+                {
+                    method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                body: JSON.stringify({
-                    init_data: tg.initData
-                })
-            }
-        );
+                    body: JSON.stringify({
+                        init_data:
+                            tg.initData
+                    })
+                }
+            );
 
         const result =
             await response.json();
@@ -191,7 +346,8 @@ async function authorize() {
             );
         }
 
-        currentUser = result.user;
+        currentUser =
+            result.user;
 
         nameElement.textContent =
             getFullName(currentUser);
@@ -209,12 +365,15 @@ async function authorize() {
         statusElement.className =
             "status success";
 
-        continueButton.disabled = false;
+        continueButton.disabled =
+            false;
 
         sessionStorage.setItem(
             "telegram_user",
             JSON.stringify(currentUser)
         );
+
+        connectWebSocket();
 
     } catch (error) {
         showError(error.message);
@@ -281,7 +440,9 @@ function renderUsers(users) {
 
         userElement.addEventListener(
             "click",
-            () => openChatScreen(user)
+            () => {
+                openChatScreen(user);
+            }
         );
 
         usersList.appendChild(
@@ -298,21 +459,23 @@ async function openUsersScreen() {
         "Загрузка пользователей...";
 
     try {
-        const response = await fetch(
-            "/api/users",
-            {
-                method: "POST",
+        const response =
+            await fetch(
+                "/api/users",
+                {
+                    method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                body: JSON.stringify({
-                    init_data: tg.initData
-                })
-            }
-        );
+                    body: JSON.stringify({
+                        init_data:
+                            tg.initData
+                    })
+                }
+            );
 
         const result =
             await response.json();
@@ -324,7 +487,9 @@ async function openUsersScreen() {
             );
         }
 
-        renderUsers(result.users);
+        renderUsers(
+            result.users
+        );
 
         cardElement.style.display =
             "none";
@@ -338,10 +503,11 @@ async function openUsersScreen() {
         vibrate();
 
     } catch (error) {
-        alert(error.message);
+        showAlert(error.message);
 
     } finally {
-        continueButton.disabled = false;
+        continueButton.disabled =
+            false;
 
         continueButton.textContent =
             "💬 Перейти к чатам";
@@ -354,7 +520,8 @@ async function openUsersScreen() {
 -------------------------------------------------- */
 
 async function openChatScreen(user) {
-    selectedUser = user;
+    selectedUser =
+        user;
 
     sessionStorage.setItem(
         "selected_user",
@@ -371,10 +538,10 @@ async function openChatScreen(user) {
         user.photo_url ||
         getDefaultAvatar();
 
-    usersScreen.style.display =
+    cardElement.style.display =
         "none";
 
-    cardElement.style.display =
+    usersScreen.style.display =
         "none";
 
     chatScreen.style.display =
@@ -386,6 +553,8 @@ async function openChatScreen(user) {
         </div>
     `;
 
+    renderedMessageIds.clear();
+
     vibrate();
 
     await loadMessages();
@@ -393,41 +562,10 @@ async function openChatScreen(user) {
     messageInput.focus();
 }
 
+
 /* --------------------------------------------------
-   ТЕСТОВЫЕ СООБЩЕНИЯ
+   ЗАГРУЗКА СООБЩЕНИЙ
 -------------------------------------------------- */
-
-function removeEmptyChatMessage() {
-    const emptyMessage =
-        messagesElement.querySelector(
-            ".chat-empty"
-        );
-
-    if (emptyMessage) {
-        emptyMessage.remove();
-    }
-}
-
-
-function addMessage(text, sender = "me") {
-    removeEmptyChatMessage();
-
-    const message =
-        document.createElement("div");
-
-    message.className =
-        `message ${sender}`;
-
-    message.textContent =
-        text;
-
-    messagesElement.appendChild(
-        message
-    );
-
-    messagesElement.scrollTop =
-        messagesElement.scrollHeight;
-}
 
 async function loadMessages() {
     if (!selectedUser) {
@@ -435,22 +573,26 @@ async function loadMessages() {
     }
 
     try {
-        const response = await fetch(
-            "/api/messages",
-            {
-                method: "POST",
+        const response =
+            await fetch(
+                "/api/messages",
+                {
+                    method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                body: JSON.stringify({
-                    init_data: tg.initData,
-                    user_id: selectedUser.id
-                })
-            }
-        );
+                    body: JSON.stringify({
+                        init_data:
+                            tg.initData,
+
+                        user_id:
+                            selectedUser.id
+                    })
+                }
+            );
 
         const result =
             await response.json();
@@ -462,7 +604,10 @@ async function loadMessages() {
             );
         }
 
-        messagesElement.innerHTML = "";
+        renderedMessageIds.clear();
+
+        messagesElement.innerHTML =
+            "";
 
         if (!result.messages.length) {
             messagesElement.innerHTML = `
@@ -470,7 +615,9 @@ async function loadMessages() {
                     Начните переписку с
                     <strong>
                         ${escapeHtml(
-                            getFullName(selectedUser)
+                            getFullName(
+                                selectedUser
+                            )
                         )}
                     </strong>
                 </div>
@@ -490,18 +637,88 @@ async function loadMessages() {
                 addMessage(
                     message.text,
                     sender,
+                    message.id
                 );
             }
         );
 
+        messagesElement.scrollTop =
+            messagesElement.scrollHeight;
+
     } catch (error) {
         messagesElement.innerHTML = `
             <div class="chat-empty">
-                ${escapeHtml(error.message)}
+                ${escapeHtml(
+                    error.message
+                )}
             </div>
         `;
     }
 }
+
+
+/* --------------------------------------------------
+   ОТОБРАЖЕНИЕ СООБЩЕНИЙ
+-------------------------------------------------- */
+
+function removeEmptyChatMessage() {
+    const emptyMessage =
+        messagesElement.querySelector(
+            ".chat-empty"
+        );
+
+    if (emptyMessage) {
+        emptyMessage.remove();
+    }
+}
+
+
+function addMessage(
+    text,
+    sender = "me",
+    messageId = null
+) {
+    if (
+        messageId !== null &&
+        renderedMessageIds.has(
+            messageId
+        )
+    ) {
+        return;
+    }
+
+    removeEmptyChatMessage();
+
+    const messageElement =
+        document.createElement("div");
+
+    messageElement.className =
+        `message ${sender}`;
+
+    messageElement.textContent =
+        text;
+
+    if (messageId !== null) {
+        renderedMessageIds.add(
+            messageId
+        );
+
+        messageElement.dataset.messageId =
+            String(messageId);
+    }
+
+    messagesElement.appendChild(
+        messageElement
+    );
+
+    messagesElement.scrollTop =
+        messagesElement.scrollHeight;
+}
+
+
+/* --------------------------------------------------
+   ОТПРАВКА СООБЩЕНИЯ
+-------------------------------------------------- */
 
 async function sendMessage() {
     const text =
@@ -511,28 +728,36 @@ async function sendMessage() {
         return;
     }
 
-    sendButton.disabled = true;
-    messageInput.disabled = true;
+    sendButton.disabled =
+        true;
+
+    messageInput.disabled =
+        true;
 
     try {
-        const response = await fetch(
-            "/api/messages/send",
-            {
-                method: "POST",
+        const response =
+            await fetch(
+                "/api/messages/send",
+                {
+                    method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                body: JSON.stringify({
-                    init_data: tg.initData,
-                    receiver_id:
-                        selectedUser.id,
-                    text: text
-                })
-            }
-        );
+                    body: JSON.stringify({
+                        init_data:
+                            tg.initData,
+
+                        receiver_id:
+                            selectedUser.id,
+
+                        text:
+                            text
+                    })
+                }
+            );
 
         const result =
             await response.json();
@@ -547,18 +772,24 @@ async function sendMessage() {
         addMessage(
             result.message.text,
             "me",
+            result.message.id
         );
 
-        messageInput.value = "";
+        messageInput.value =
+            "";
 
         vibrate("medium");
 
     } catch (error) {
-        alert(error.message);
+        showAlert(error.message);
 
     } finally {
-        sendButton.disabled = false;
-        messageInput.disabled = false;
+        sendButton.disabled =
+            false;
+
+        messageInput.disabled =
+            false;
+
         messageInput.focus();
     }
 }
@@ -580,8 +811,14 @@ backButton.addEventListener(
         usersScreen.style.display =
             "none";
 
+        chatScreen.style.display =
+            "none";
+
         cardElement.style.display =
             "block";
+
+        selectedUser =
+            null;
 
         vibrate();
     }
@@ -594,10 +831,16 @@ chatBackButton.addEventListener(
         chatScreen.style.display =
             "none";
 
+        cardElement.style.display =
+            "none";
+
         usersScreen.style.display =
             "block";
 
-        selectedUser = null;
+        selectedUser =
+            null;
+
+        renderedMessageIds.clear();
 
         vibrate();
     }
@@ -605,7 +848,7 @@ chatBackButton.addEventListener(
 
 
 /* --------------------------------------------------
-   ОТПРАВКА СООБЩЕНИЯ
+   ОБРАБОТЧИКИ ОТПРАВКИ
 -------------------------------------------------- */
 
 sendButton.addEventListener(
@@ -619,8 +862,42 @@ messageInput.addEventListener(
     (event) => {
         if (event.key === "Enter") {
             event.preventDefault();
+
             sendMessage();
         }
+    }
+);
+
+
+/* --------------------------------------------------
+   ЖИЗНЕННЫЙ ЦИКЛ
+-------------------------------------------------- */
+
+document.addEventListener(
+    "visibilitychange",
+    () => {
+        if (
+            document.visibilityState ===
+            "visible"
+        ) {
+            connectWebSocket();
+
+            if (selectedUser) {
+                loadMessages();
+            }
+        }
+    }
+);
+
+
+window.addEventListener(
+    "beforeunload",
+    () => {
+        clearTimeout(
+            reconnectTimer
+        );
+
+        socket?.close();
     }
 );
 
