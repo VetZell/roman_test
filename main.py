@@ -1,4 +1,4 @@
-import asyncio
+
 import os
 
 from contextlib import asynccontextmanager
@@ -8,8 +8,10 @@ from fastapi import (
     Depends,
     FastAPI,
     HTTPException,
-    WebSocket,
-    WebSocketDisconnect,
+)
+from app.websocket import (
+    manager,
+    websocket_endpoint,
 )
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,6 +46,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.websocket("/ws")(websocket_endpoint)
+
 app.mount(
     "/static",
     StaticFiles(directory=STATIC_DIR),
@@ -67,85 +71,6 @@ class SendMessageRequest(BaseModel):
         min_length=1,
         max_length=4000,
     )
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: dict[
-            int,
-            list[WebSocket],
-        ] = {}
-
-    async def connect(
-        self,
-        user_id: int,
-        websocket: WebSocket,
-    ):
-        await websocket.accept()
-
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-
-        self.active_connections[user_id].append(
-            websocket
-        )
-
-    def disconnect(
-        self,
-        user_id: int,
-        websocket: WebSocket,
-    ):
-        connections = self.active_connections.get(
-            user_id,
-            [],
-        )
-
-        if websocket in connections:
-            connections.remove(websocket)
-
-        if not connections:
-            self.active_connections.pop(
-                user_id,
-                None,
-            )
-
-    async def send_to_user(
-        self,
-        user_id: int,
-        data: dict,
-    ):
-        connections = self.active_connections.get(
-            user_id,
-            [],
-        )
-
-        disconnected = []
-
-        for connection in connections:
-            try:
-                await connection.send_json(data)
-            except Exception:
-                disconnected.append(connection)
-
-        for connection in disconnected:
-            self.disconnect(
-                user_id,
-                connection,
-            )
-
-
-manager = ConnectionManager()
-
-@app.get("/")
-async def home():
-    return FileResponse(STATIC_DIR / "index.html")
-
-
-@app.get("/health")
-async def health():
-    return {
-        "status": "ok",
-        "service": "Roman Messenger",
-    }
 
 
 @app.get("/health/database")
@@ -359,85 +284,6 @@ async def send_message(
         "message": message_data,
     }
     
-@app.websocket("/ws")
-async def websocket_endpoint(
-    websocket: WebSocket,
-):
-    init_data = websocket.query_params.get(
-        "init_data"
-    )
-
-    if not init_data:
-        await websocket.close(
-            code=1008,
-            reason="Telegram initData отсутствует",
-        )
-        return
-
-    database = SessionLocal()
-
-    try:
-        telegram_user = validate_telegram_init_data(
-            init_data
-        )
-
-        current_user = create_or_update_user(
-            telegram_user,
-            database,
-        )
-
-        user_id = current_user.id
-
-        await manager.connect(
-            user_id,
-            websocket,
-        )
-
-        await websocket.send_json(
-            {
-                "type": "connected",
-                "user_id": user_id,
-            }
-        )
-
-        while True:
-            try:
-                data = await asyncio.wait_for(
-                    websocket.receive_text(),
-                    timeout=30,
-                )
-
-                if data == "ping":
-                    await websocket.send_text(
-                        "pong"
-                    )
-
-            except asyncio.TimeoutError:
-                await websocket.send_text(
-                    "ping"
-                )
-
-    except WebSocketDisconnect:
-        pass
-
-    except Exception:
-        try:
-            await websocket.close(
-                code=1008,
-            )
-        except Exception:
-            pass
-
-    finally:
-        if "user_id" in locals():
-            manager.disconnect(
-                user_id,
-                websocket,
-            )
-
-        database.close()
-    
-
 if __name__ == "__main__":
     import uvicorn
 
