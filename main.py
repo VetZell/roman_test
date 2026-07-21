@@ -273,6 +273,45 @@ def telegram_auth(
         },
     }
 
+@app.post("/api/users")
+def get_users(
+    request: TelegramAuthRequest,
+    database: Session = Depends(get_database),
+):
+    telegram_user = validate_telegram_init_data(
+        request.init_data
+    )
+
+    current_user = create_or_update_user(
+        telegram_user,
+        database,
+    )
+
+    users = database.scalars(
+        select(User)
+        .where(
+            User.id != current_user.id,
+            User.is_active.is_(True),
+        )
+        .order_by(User.first_name.asc())
+        .limit(100)
+    ).all()
+
+    return {
+        "ok": True,
+        "users": [
+            {
+                "id": user.id,
+                "telegram_id": user.telegram_id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "username": user.username,
+                "photo_url": user.photo_url,
+                "messenger_code": user.messenger_code,
+            }
+            for user in users
+        ],
+    }
 
 if __name__ == "__main__":
     import uvicorn
