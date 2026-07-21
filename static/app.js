@@ -353,7 +353,7 @@ async function openUsersScreen() {
    ОТКРЫТИЕ ЧАТА
 -------------------------------------------------- */
 
-function openChatScreen(user) {
+async function openChatScreen(user) {
     selectedUser = user;
 
     sessionStorage.setItem(
@@ -371,15 +371,6 @@ function openChatScreen(user) {
         user.photo_url ||
         getDefaultAvatar();
 
-    messagesElement.innerHTML = `
-        <div class="chat-empty">
-            Начните переписку с
-            <strong>
-                ${escapeHtml(getFullName(user))}
-            </strong>
-        </div>
-    `;
-
     usersScreen.style.display =
         "none";
 
@@ -389,11 +380,18 @@ function openChatScreen(user) {
     chatScreen.style.display =
         "block";
 
-    messageInput.focus();
+    messagesElement.innerHTML = `
+        <div class="chat-empty">
+            Загрузка сообщений...
+        </div>
+    `;
 
     vibrate();
-}
 
+    await loadMessages();
+
+    messageInput.focus();
+}
 
 /* --------------------------------------------------
    ТЕСТОВЫЕ СООБЩЕНИЯ
@@ -431,8 +429,81 @@ function addMessage(text, sender = "me") {
         messagesElement.scrollHeight;
 }
 
+async function loadMessages() {
+    if (!selectedUser) {
+        return;
+    }
 
-function sendMessage() {
+    try {
+        const response = await fetch(
+            "/api/messages",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    init_data: tg.initData,
+                    user_id: selectedUser.id
+                })
+            }
+        );
+
+        const result =
+            await response.json();
+
+        if (!response.ok || !result.ok) {
+            throw new Error(
+                result.detail ||
+                "Не удалось загрузить сообщения"
+            );
+        }
+
+        messagesElement.innerHTML = "";
+
+        if (!result.messages.length) {
+            messagesElement.innerHTML = `
+                <div class="chat-empty">
+                    Начните переписку с
+                    <strong>
+                        ${escapeHtml(
+                            getFullName(selectedUser)
+                        )}
+                    </strong>
+                </div>
+            `;
+
+            return;
+        }
+
+        result.messages.forEach(
+            (message) => {
+                const sender =
+                    message.sender_id ===
+                    currentUser.id
+                        ? "me"
+                        : "other";
+
+                addMessage(
+                    message.text,
+                    sender,
+                );
+            }
+        );
+
+    } catch (error) {
+        messagesElement.innerHTML = `
+            <div class="chat-empty">
+                ${escapeHtml(error.message)}
+            </div>
+        `;
+    }
+}
+
+async function sendMessage() {
     const text =
         messageInput.value.trim();
 
@@ -440,13 +511,56 @@ function sendMessage() {
         return;
     }
 
-    addMessage(text, "me");
+    sendButton.disabled = true;
+    messageInput.disabled = true;
 
-    messageInput.value = "";
+    try {
+        const response = await fetch(
+            "/api/messages/send",
+            {
+                method: "POST",
 
-    messageInput.focus();
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-    vibrate("medium");
+                body: JSON.stringify({
+                    init_data: tg.initData,
+                    receiver_id:
+                        selectedUser.id,
+                    text: text
+                })
+            }
+        );
+
+        const result =
+            await response.json();
+
+        if (!response.ok || !result.ok) {
+            throw new Error(
+                result.detail ||
+                "Не удалось отправить сообщение"
+            );
+        }
+
+        addMessage(
+            result.message.text,
+            "me",
+        );
+
+        messageInput.value = "";
+
+        vibrate("medium");
+
+    } catch (error) {
+        alert(error.message);
+
+    } finally {
+        sendButton.disabled = false;
+        messageInput.disabled = false;
+        messageInput.focus();
+    }
 }
 
 
