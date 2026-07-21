@@ -532,7 +532,7 @@ async def send_message(
         "message": message_data,
     }
     
-    @app.websocket("/ws")
+@app.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
 ):
@@ -566,10 +566,12 @@ async def websocket_endpoint(
             websocket,
         )
 
-        await websocket.send_json({
-            "type": "connected",
-            "user_id": user_id,
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "user_id": user_id,
+            }
+        )
 
         while True:
             try:
