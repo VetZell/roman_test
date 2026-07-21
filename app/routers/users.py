@@ -7,6 +7,7 @@ from app.auth import (
     validate_telegram_init_data,
 )
 from app.schemas import TelegramAuthRequest
+from app.websocket import manager
 from database import get_database
 from models import User
 
@@ -27,6 +28,7 @@ def serialize_user(user: User) -> dict:
         "photo_url": user.photo_url,
         "language_code": user.language_code,
         "messenger_code": user.messenger_code,
+        "is_online": manager.is_online(user.id),
     }
 
 
@@ -74,7 +76,6 @@ def get_users(
             User.first_name.asc(),
             User.id.asc(),
         )
-        .limit(100)
     ).all()
 
     return {
