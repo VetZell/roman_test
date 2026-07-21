@@ -511,16 +511,26 @@ async def send_message(
     database.commit()
     database.refresh(message)
 
+message_data = {
+    "id": message.id,
+    "sender_id": message.sender_id,
+    "receiver_id": message.receiver_id,
+    "text": message.text,
+    "created_at": message.created_at.isoformat(),
+}
+
+await manager.send_to_user(
+    receiver.id,
+    {
+        "type": "new_message",
+        "message": message_data,
+    },
+)
+
     return {
-        "ok": True,
-        "message": {
-            "id": message.id,
-            "sender_id": message.sender_id,
-            "receiver_id": message.receiver_id,
-            "text": message.text,
-            "created_at": message.created_at.isoformat(),
-        },
-    }
+    "ok": True,
+    "message": message_data,
+}
     
     @app.websocket("/ws")
 async def websocket_endpoint(
