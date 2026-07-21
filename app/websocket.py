@@ -141,7 +141,7 @@ async def websocket_endpoint(
                 )
 
     except WebSocketDisconnect:
-        pass
+    break
 
     except Exception:
         try:
