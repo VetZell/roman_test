@@ -156,7 +156,6 @@ function updateChatHeaderStatus() {
         <span class="chat-user-code">
             ${escapeHtml(getUserSubtitle(selectedUser))}
         </span>
-
         <span class="chat-online-status ${
             selectedUser.is_online ? "online" : "offline"
         }">
@@ -244,7 +243,6 @@ function handleSocketEvent(data) {
             data.user_id,
             data.is_online,
         );
-
         return;
     }
 
@@ -277,6 +275,7 @@ function handleSocketEvent(data) {
 
     vibrate("medium");
 }
+
 /* --------------------------------------------------
    TELEGRAM-АВТОРИЗАЦИЯ
 -------------------------------------------------- */
@@ -392,10 +391,7 @@ function renderUsers(users) {
                     src="${escapeHtml(avatar)}"
                     alt=""
                 >
-
-                <span
-                    class="avatar-online-dot ${onlineClass}"
-                ></span>
+                <span class="avatar-online-dot ${onlineClass}"></span>
             </div>
 
             <div class="user-info">
@@ -407,9 +403,7 @@ function renderUsers(users) {
                     ${escapeHtml(getUserSubtitle(user))}
                 </div>
 
-                <div
-                    class="user-online-status ${onlineClass}"
-                >
+                <div class="user-online-status ${onlineClass}">
                     <span class="online-dot"></span>
                     ${escapeHtml(getOnlineText(user))}
                 </div>
@@ -518,6 +512,7 @@ async function openChatScreen(user) {
 
     messageInput.focus();
 }
+
 /* --------------------------------------------------
    ЗАГРУЗКА СООБЩЕНИЙ
 -------------------------------------------------- */
@@ -533,7 +528,8 @@ async function loadMessages() {
             {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
+                    "Content-Type":
+                        "application/json",
                 },
                 body: JSON.stringify({
                     init_data: tg.initData,
@@ -563,7 +559,6 @@ async function loadMessages() {
                     )}
                 </div>
             `;
-
             return;
         }
 
@@ -585,7 +580,7 @@ async function loadMessages() {
             messagesElement.scrollHeight;
     } catch (error) {
         messagesElement.innerHTML = `
-            <div class="chat-empty error">
+            <div class="chat-empty">
                 ${escapeHtml(error.message)}
             </div>
         `;
@@ -636,7 +631,9 @@ function addMessage(
             String(messageId);
     }
 
-    messagesElement.appendChild(messageElement);
+    messagesElement.appendChild(
+        messageElement,
+    );
 
     messagesElement.scrollTop =
         messagesElement.scrollHeight;
@@ -647,7 +644,8 @@ function addMessage(
 -------------------------------------------------- */
 
 async function sendMessage() {
-    const text = messageInput.value.trim();
+    const text =
+        messageInput.value.trim();
 
     if (!text || !selectedUser) {
         return;
@@ -662,11 +660,13 @@ async function sendMessage() {
             {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
+                    "Content-Type":
+                        "application/json",
                 },
                 body: JSON.stringify({
                     init_data: tg.initData,
-                    receiver_id: selectedUser.id,
+                    receiver_id:
+                        selectedUser.id,
                     text,
                 }),
             },
@@ -698,3 +698,94 @@ async function sendMessage() {
         messageInput.focus();
     }
 }
+
+/* --------------------------------------------------
+   НАВИГАЦИЯ
+-------------------------------------------------- */
+
+continueButton.addEventListener(
+    "click",
+    openUsersScreen,
+);
+
+backButton.addEventListener(
+    "click",
+    () => {
+        usersScreen.style.display = "none";
+        chatScreen.style.display = "none";
+        cardElement.style.display = "block";
+
+        selectedUser = null;
+
+        vibrate();
+    },
+);
+
+chatBackButton.addEventListener(
+    "click",
+    () => {
+        chatScreen.style.display = "none";
+        cardElement.style.display = "none";
+        usersScreen.style.display = "block";
+
+        selectedUser = null;
+        renderedMessageIds.clear();
+
+        renderUsers(usersCache);
+
+        vibrate();
+    },
+);
+
+/* --------------------------------------------------
+   ОБРАБОТЧИКИ ОТПРАВКИ
+-------------------------------------------------- */
+
+sendButton.addEventListener(
+    "click",
+    sendMessage,
+);
+
+messageInput.addEventListener(
+    "keydown",
+    (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendMessage();
+        }
+    },
+);
+
+/* --------------------------------------------------
+   ЖИЗНЕННЫЙ ЦИКЛ
+-------------------------------------------------- */
+
+document.addEventListener(
+    "visibilitychange",
+    () => {
+        if (
+            document.visibilityState ===
+            "visible"
+        ) {
+            connectWebSocket();
+
+            if (selectedUser) {
+                loadMessages();
+            }
+        }
+    },
+);
+
+window.addEventListener(
+    "beforeunload",
+    () => {
+        clearTimeout(reconnectTimer);
+        socket?.close();
+    },
+);
+
+/* --------------------------------------------------
+   ЗАПУСК
+-------------------------------------------------- */
+
+authorize();
