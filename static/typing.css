@@ -1,0 +1,30 @@
+/* ---------- TYPING STATUS ---------- */
+
+.typing-status {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 4px;
+    color: #22c55e;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.typing-dots {
+    display: inline-block;
+    min-width: 14px;
+    animation: typing-pulse 1s infinite;
+}
+
+@keyframes typing-pulse {
+    0% {
+        opacity: .3;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: .3;
+    }
+}
