@@ -463,7 +463,7 @@ def get_messages(
 
 
 @app.post("/api/messages/send")
-def send_message(
+async def send_message(
     request: SendMessageRequest,
     database: Session = Depends(get_database),
 ):
