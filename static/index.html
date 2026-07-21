@@ -246,8 +246,8 @@
 
                 usernameElement.textContent =
     user.username
-        ? `@${user.username} • ${user.messenger_code}`
-        : user.messenger_code;
+        ? `@${user.username}`
+        : `Telegram ID: ${user.id}`;
 
                 if (user.photo_url) {
                     avatarElement.src =
