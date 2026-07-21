@@ -1,193 +1,292 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
 
     <meta
         name="viewport"
-        content="width=device-width, initial-scale=1.0">
+        content="width=device-width, initial-scale=1.0,
+        viewport-fit=cover"
+    >
 
     <title>Roman Messenger</title>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 
     <style>
-
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        * {
+            box-sizing: border-box;
         }
 
-        body{
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding:
+                calc(20px + env(safe-area-inset-top))
+                20px
+                calc(20px + env(safe-area-inset-bottom));
 
-            background:#10141c;
-            color:white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
 
-            min-height:100vh;
+            background: var(--tg-theme-bg-color, #10141c);
+            color: var(--tg-theme-text-color, #ffffff);
 
-            display:flex;
-            justify-content:center;
-            align-items:center;
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
         }
 
-        .card{
+        .card {
+            width: 100%;
+            max-width: 430px;
+            padding: 28px;
 
-            width:92%;
-            max-width:420px;
+            text-align: center;
 
-            background:#1c2330;
+            background:
+                var(--tg-theme-secondary-bg-color, #1c2330);
 
-            border-radius:22px;
-
-            padding:30px;
-
-            text-align:center;
-
-            box-shadow:0 0 30px rgba(0,0,0,.35);
-
+            border-radius: 24px;
         }
 
-        img{
+        .avatar {
+            width: 92px;
+            height: 92px;
 
-            width:90px;
-            height:90px;
+            margin-bottom: 18px;
 
-            border-radius:50%;
+            border-radius: 50%;
+            object-fit: cover;
 
-            margin-bottom:18px;
-
+            background: #2aabee;
         }
 
-        h1{
-
-            font-size:30px;
-            margin-bottom:10px;
-
+        h1 {
+            margin: 0 0 22px;
+            font-size: 30px;
         }
 
-        h2{
-
-            margin-top:15px;
-            font-size:24px;
-
+        h2 {
+            margin: 0 0 8px;
+            font-size: 25px;
         }
 
-        p{
-
-            opacity:.75;
-            margin-top:10px;
-            line-height:1.5;
-
+        p {
+            margin: 8px 0;
+            color:
+                var(--tg-theme-hint-color, #aab2c0);
         }
 
-        button{
+        .status {
+            margin-top: 22px;
+            padding: 13px;
 
-            width:100%;
+            border-radius: 14px;
 
-            margin-top:30px;
-
-            padding:15px;
-
-            border:none;
-
-            border-radius:16px;
-
-            background:#2AABEE;
-
-            color:white;
-
-            font-size:18px;
-
-            font-weight:bold;
-
-            cursor:pointer;
-
+            background: rgba(255, 255, 255, 0.06);
         }
 
-        button:active{
-
-            transform:scale(.98);
-
+        .success {
+            color: #40d17d;
         }
 
+        .error {
+            color: #ff6b6b;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 24px;
+            padding: 15px;
+
+            border: none;
+            border-radius: 15px;
+
+            background:
+                var(--tg-theme-button-color, #2aabee);
+
+            color:
+                var(--tg-theme-button-text-color, #ffffff);
+
+            font-size: 17px;
+            font-weight: 700;
+
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: default;
+        }
     </style>
-
 </head>
 
 <body>
+    <main class="card">
+        <img
+            id="avatar"
+            class="avatar"
+            src="https://telegram.org/img/t_logo.png"
+            alt="Аватар"
+        >
 
-<div class="card">
+        <h1>Roman Messenger</h1>
 
-    <img id="avatar"
-         src="https://telegram.org/img/t_logo.png">
+        <h2 id="name">Авторизация...</h2>
 
-    <h1>Roman Messenger</h1>
+        <p id="username">
+            Проверяем данные Telegram
+        </p>
 
-    <h2 id="name">Загрузка...</h2>
+        <div id="status" class="status">
+            Подождите...
+        </div>
 
-    <p id="username">
-        Добро пожаловать!
-    </p>
+        <button
+            id="continue-button"
+            type="button"
+            disabled
+        >
+            💬 Перейти к чатам
+        </button>
+    </main>
 
-    <button onclick="startMessenger()">
-        💬 Открыть мессенджер
-    </button>
+    <script>
+        const tg = window.Telegram?.WebApp;
 
-</div>
+        const nameElement =
+            document.getElementById("name");
 
+        const usernameElement =
+            document.getElementById("username");
 
-<script>
+        const avatarElement =
+            document.getElementById("avatar");
 
-const tg = window.Telegram.WebApp;
+        const statusElement =
+            document.getElementById("status");
 
-tg.ready();
+        const continueButton =
+            document.getElementById("continue-button");
 
-tg.expand();
+        function showError(message) {
+            nameElement.textContent =
+                "Ошибка авторизации";
 
-document.body.style.background =
-tg.themeParams.bg_color || "#10141c";
+            usernameElement.textContent =
+                "Открой Mini App через Telegram";
 
-const user = tg.initDataUnsafe.user;
+            statusElement.textContent = message;
+            statusElement.className =
+                "status error";
 
-if(user){
+            continueButton.disabled = true;
+        }
 
-    document.getElementById("name").innerHTML =
-        user.first_name;
+        async function authorize() {
+            if (!tg) {
+                showError(
+                    "Telegram WebApp SDK недоступен."
+                );
+                return;
+            }
 
-    document.getElementById("username").innerHTML =
-        "@" + (user.username || "без username");
+            tg.ready();
+            tg.expand();
 
-    if(user.photo_url){
+            const initData = tg.initData;
 
-        document.getElementById("avatar").src =
-            user.photo_url;
+            if (!initData) {
+                showError(
+                    "Данные Telegram не получены. " +
+                    "Открой приложение кнопкой внутри бота."
+                );
+                return;
+            }
 
-    }
+            try {
+                const response = await fetch(
+                    "/api/auth/telegram",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+                        body: JSON.stringify({
+                            init_data: initData
+                        })
+                    }
+                );
 
-}
-else{
+                const result = await response.json();
 
-    document.getElementById("name").innerHTML =
-        "Roman";
+                if (!response.ok || !result.ok) {
+                    throw new Error(
+                        result.detail ||
+                        "Авторизация не выполнена"
+                    );
+                }
 
-    document.getElementById("username").innerHTML =
-        "Открой приложение из Telegram";
+                const user = result.user;
 
-}
+                const fullName = [
+                    user.first_name,
+                    user.last_name
+                ]
+                    .filter(Boolean)
+                    .join(" ");
 
-function startMessenger(){
+                nameElement.textContent =
+                    fullName || "Пользователь";
 
-    alert(
-        "Следующим шагом мы откроем список ваших чатов."
-    );
+                usernameElement.textContent =
+                    user.username
+                        ? `@${user.username}`
+                        : `Telegram ID: ${user.id}`;
 
-}
+                if (user.photo_url) {
+                    avatarElement.src =
+                        user.photo_url;
+                }
 
-</script>
+                statusElement.textContent =
+                    "✓ Личность подтверждена Telegram";
 
+                statusElement.className =
+                    "status success";
+
+                continueButton.disabled = false;
+
+                sessionStorage.setItem(
+                    "telegram_user",
+                    JSON.stringify(user)
+                );
+
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        continueButton.addEventListener(
+            "click",
+            () => {
+                tg.HapticFeedback?.impactOccurred(
+                    "light"
+                );
+
+                alert(
+                    "Авторизация готова. " +
+                    "Следующим шагом добавим экран чатов."
+                );
+            }
+        );
+
+        authorize();
+    </script>
 </body>
-
 </html>
