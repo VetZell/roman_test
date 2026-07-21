@@ -241,6 +241,73 @@ class SendMessageRequest(BaseModel):
         max_length=4000,
     )
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[
+            int,
+            list[WebSocket],
+        ] = {}
+
+    async def connect(
+        self,
+        user_id: int,
+        websocket: WebSocket,
+    ):
+        await websocket.accept()
+
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+
+        self.active_connections[user_id].append(
+            websocket
+        )
+
+    def disconnect(
+        self,
+        user_id: int,
+        websocket: WebSocket,
+    ):
+        connections = self.active_connections.get(
+            user_id,
+            [],
+        )
+
+        if websocket in connections:
+            connections.remove(websocket)
+
+        if not connections:
+            self.active_connections.pop(
+                user_id,
+                None,
+            )
+
+    async def send_to_user(
+        self,
+        user_id: int,
+        data: dict,
+    ):
+        connections = self.active_connections.get(
+            user_id,
+            [],
+        )
+
+        disconnected = []
+
+        for connection in connections:
+            try:
+                await connection.send_json(data)
+            except Exception:
+                disconnected.append(connection)
+
+        for connection in disconnected:
+            self.disconnect(
+                user_id,
+                connection,
+            )
+
+
+manager = ConnectionManager()
+
 @app.get("/")
 async def home():
     return FileResponse(STATIC_DIR / "index.html")
